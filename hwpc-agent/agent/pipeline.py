@@ -22,6 +22,7 @@ class PipelineResult:
     task: TaskInput | None = None
     scene: SceneProfile | None = None
     plan: PlatformPlan | None = None
+    facts: list = field(default_factory=list)  # 该型号全部事实(含待复核)
     selection: FactSelection | None = None
     images: list[ImageRef] = field(default_factory=list)
     draft: Draft | None = None
@@ -126,6 +127,7 @@ def run(task: TaskInput, retriever: Retriever, steps: Steps | None = None) -> Pi
         return _block(res, f"知识库检索失败: {type(exc).__name__}")
     if not facts:
         return _block(res, "知识库没有该型号的事实资料")
+    res.facts = facts
     res.trace.append(f"检索:{len(facts)} 条事实,{len(res.images)} 张图片")
 
     # 5 事实点提取
@@ -137,7 +139,10 @@ def run(task: TaskInput, retriever: Retriever, steps: Steps | None = None) -> Pi
     res.trace.append(f"事实点:可用 {len(res.selection.usable)},待复核 {len(res.selection.pending)}")
 
     # 6-7 图文编排与软文生成
-    res.draft = st.compose(task, res.scene, res.plan, res.selection, res.images)
+    try:
+        res.draft = st.compose(task, res.scene, res.plan, res.selection, res.images)
+    except Exception as exc:  # noqa: BLE001  生成失败(含模型未配置/调用失败)即阻断,不输出半成品
+        return _block(res, f"软文生成失败: {exc}")
     res.trace.append("软文生成完成")
 
     # 8 核验与合规
@@ -157,3 +162,28 @@ def run(task: TaskInput, retriever: Retriever, steps: Steps | None = None) -> Pi
     res.exported = st.export(res.draft, res.report)
     res.trace.append("导出完成")
     return res
+
+
+def real_steps(retriever: Retriever) -> Steps:
+    """接入 B、C 的真实模块。compose 需要大模型环境变量;未配置时 compose 抛错,run 不会导出。"""
+    from agent import compliance as comp_mod
+    from agent import compose as compose_mod
+    from agent import export as export_mod
+    from agent import platform_rules, scene
+    from agent import verify as verify_mod
+
+    ctx: dict = {}
+
+    def compose(task, sc, plan, sel, images):
+        ctx["model"] = task.model
+        return compose_mod.compose_step(task, sc, plan, sel, images)
+
+    def verify(draft, sel, images):
+        return verify_mod.verify(draft, sel.usable + sel.pending, images)
+
+    def compliance(draft):
+        records = retriever.get_price_records(ctx["model"]) if ctx.get("model") else []
+        return comp_mod.compliance_check(draft, records)
+
+    return Steps(scene=scene.scene_step, platform=platform_rules.platform_step, compose=compose,
+                 verify=verify, compliance=compliance, export=export_mod.export_markdown)

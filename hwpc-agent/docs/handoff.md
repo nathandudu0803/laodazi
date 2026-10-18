@@ -126,3 +126,105 @@ res = run(task, retriever, steps)
 - 尚未接 ima(用的是本地副本)。
 - 场景匹配目前是关键词规则,8 类之外会走兜底场景,兜底只写"人群、任务、事实、限制"四件事。
 - 增强模块(客户洞察卡、1/3/7 天跟进)只写在 `prompts/06_generation.md` 末尾,代码里还没有实现。
+
+## [2026-10-18] C:第 1-5 步完成(核验、合规、导出、界面)
+
+完成了什么:禁用词表、事实与图片核验、合规检查与价格护栏、导出功能、Gradio 界面。
+
+改动文件:`data/banned_terms.yaml`(新建)、`agent/verify.py`、`agent/compliance.py`、`agent/export.py`、`app.py`。
+
+### 第 1 步:禁用词表(`data/banned_terms.yaml`)
+
+- 从知识库原文(P6/08-合规、P6/02-平台模板、P3/08-竞品对比、P5-培训赋能)提取,未凭空编造。
+- 分 6 类:绝对化用语(唯一、第一、最强等)、虚假承诺与稀缺(终身免费、最后三台等)、价格误导(全网最低、国补立减等)、竞品贬低(碾压、吊打等)、体验虚构(亲测、客户反馈等)、其他风险。
+- 每条含:term(词或正则)、category、severity(blocking/warning)、suggestion、context(可能误伤的上下文)。
+- 共 50+ 条禁用词,覆盖知识库明确提到的全部红线。
+
+### 第 2 步:事实核验(`agent/verify.py`)
+
+签名:`verify(draft, facts, images) -> Report`
+
+核验逻辑:
+1. **型号一致性**:检查 facts 中是否涉及多个型号,多型号混用则阻断。
+2. **fact_id 引用**:检查 `Draft.used_fact_ids` 是否都能在 facts 中找到。
+3. **待复核字段**:`Fact.review_status == "pending_review"` 的事实标记为警告,提示不应出现在软文中。
+4. **数值核验**:从正文提取"数字+单位"(如 16GB、70Wh、18mm),与 facts 比对,检查是否有依据。
+5. **限定条件**:如果数值有 `qualifier`(如"最高""约""仅某版本"),检查正文是否保留,缺失则阻断。
+6. **图片核验**:检查 `Draft.image_plan` 中的每张图是否在 images 列表中、型号是否一致、来源/说明/位置是否完整。
+
+返回:`Report.fact_check`(list[dict])、`Report.image_check`(list[dict])、`Report.to_confirm`(list[str])、`Report.blocked`(bool)。
+
+### 第 3 步:合规检查与价格护栏(`agent/compliance.py`)
+
+签名:`compliance_check(draft, price_records) -> list[dict]`
+
+检查内容:
+1. **禁用词扫描**:加载 `banned_terms.yaml`,对 title/lead/body/cta/tags 逐条匹配,支持正则和上下文例外。
+2. **价格护栏**:
+   - 提取正文中的金额(¥数字、数字+元),检查是否在 `price_records` 的 amount/reference_amount 中。
+   - 检查是否有价格类型(预估到手价、官网参考起价)和核验日期。
+   - 拦截知识库无数值的:国补、教育优惠、以旧换新、学生价。
+3. **禁止内容**:第一人称体验(我用、亲测)、用户评价、销量、奖项、库存、无来源排名。
+4. **自动改写**:`auto_fix_and_recheck(draft, results, max_rounds=2)` 尝试删除禁用词并重新检查,最多 2 轮。
+
+返回:list[dict],每项含 type、term、position、category、severity、suggestion、blocking。任一项 `blocking=True` 即阻断。
+
+### 第 4 步:导出(`agent/export.py`)
+
+提供三个函数:
+- `export_markdown(draft, report) -> str`:导出 Markdown,含标题、正文、配图方案、行动引导、标签、核验报告。阻断状态明确带警示。
+- `export_text(draft, report) -> str`:导出纯文本,格式简洁,适合复制。
+- `export_report_only(report) -> str`:仅导出核验与合规报告,便于单独审查。
+- `save_to_file(content, filepath)`:保存到文件。
+
+### 第 5 步:Gradio 界面(`app.py`)
+
+界面结构:
+- **输入区**:产品(必填)、目标人群、使用场景、发布平台(下拉)、临时要求。
+- **输出区**:四个 Tab 展示统一输出格式(一、场景判断 / 二、知识库依据 / 三、图文软文 / 四、核验结果),另有两个 Tab 提供 Markdown 和纯文本导出。
+- **知识库状态**:显示是否连接本地知识库(不显示密钥)。
+- **信息不足**:显示追问,不进入生成。
+- **阻断状态**:明确显示 🚫 和阻断原因。
+- **异常处理**:网络、接口、模型超时会显示错误提示,不会白屏。
+
+运行:`py app.py` 或 `python app.py`,访问 `http://localhost:7860`。
+
+### 怎么验证
+
+1. **禁用词表**:打开 `data/banned_terms.yaml`,确认 50+ 条禁用词已录入。
+2. **核验逻辑**:需要 B 完成 compose 后联调,或手写 Draft 样例测试。构造以下样例:
+   - 型号混用(D 14 参数写进 D 16)
+   - 错型号图片
+   - 缺失限定条件(70Wh 不标注配置)
+   - 待复核字段(D 16 的尺寸)
+3. **合规检查**:构造包含"全网最低""国补立减""最后三台""亲测""碾压"的 Draft,检查是否全部拦截。
+4. **价格护栏**:构造包含知识库没有的价格(如 5999 元)的 Draft,检查是否阻断。
+5. **导出**:运行 pipeline,检查导出的 Markdown 和纯文本格式是否完整。
+6. **界面**:运行 `py app.py`,在浏览器访问,输入"MateBook 14 / 大学新生 / 小红书",检查是否能完成流程并展示四段输出。
+
+### 下游需要知道
+
+- C 的三个核心函数签名:
+  - `verify(draft, facts, images) -> Report`
+  - `compliance_check(draft, price_records) -> list[dict]`
+  - `export_markdown(draft, report) -> str` / `export_text(draft, report) -> str`
+- pipeline 已在第 3 步中集成桩,替换 B 的真实 compose 后即可端到端运行。
+- `Report.blocked` 为 `True` 时不得输出,必须人工确认或修改。
+- 禁用词表支持追加,格式见文件顶部注释。
+- Gradio 界面依赖 `LOCAL_KB_ROOT` 环境变量,未设置或路径不存在会显示"知识库未加载"。
+- 界面与日志中不会显示任何密钥(Client ID、API Key、kb_id)。
+
+### 已知限制
+
+- 事实核验的"数值匹配"采用简化策略(子串匹配),复杂表述(如"约 16GB 起")可能需要人工复核。
+- 自动改写(`auto_fix_and_recheck`)仅做简单删除,不生成替代文本,复杂合规问题仍需人工。
+- 图片预览未实现(Gradio 需要图片真实路径或 base64),当前只展示文件名和来源。
+- 价格护栏只检查金额是否在 price_records 中,未检查价格类型误用(如把"预估到手价"当"现价"),需 B 在生成时注意。
+
+### 测试提示(给 D)
+
+- 测试样本见知识库:`P1-产品参数库/08-官方公开价格快照/04-Agent价格问答测试集.md`(10 个对抗用例)。
+- 易混淆型号对:`data/model_aliases.yaml` 中的 4 对,专项测试型号不被串用。
+- 待复核字段:D 14、D 16、D 16 SE、X Pro 酷睿 Ultra 的"尺寸与重量"(长度/宽度/厚度),核验应标记为"待确认"。
+- 构造包含全部 6 类禁用词的测试稿,检查拦截率。
+- 界面压力测试:连续提交、中断、异常型号。
