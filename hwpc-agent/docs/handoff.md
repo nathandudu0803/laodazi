@@ -77,3 +77,52 @@
 - `FactSelection.usable` 才能写进软文;`pending`(待复核)只能作为待确认项。`Draft.used_fact_ids` 必须填,核验靠它对照。
 - 型号不确定、场景信息缺失、平台未选、检索失败、无可用事实、核验或合规阻断,都不会进入导出。
 - 桩 compose/verify 只做确定性处理,仅用于联调,不是正式实现。
+
+## [2026-10-18] B:第 1 到 4 步完成(平台、场景、提示词、编排)
+
+完成了什么:平台参数表、场景库、8 个系统提示词模块,以及 `platform_rules.py` / `scene.py` / `compose.py` 三个模块。用 A 的 `LocalRetriever` 与 `pipeline` 做过端到端联调(模型为本地替身,未调用真实大模型)。
+
+改动文件:`agent/platform_rules.py`、`agent/scene.py`、`agent/compose.py`、`data/platform_specs.yaml`、`data/scene_library.yaml`、`prompts/01_role.md` 至 `08_compliance.md`、`tests/test_b_modules.py`,以及 `.gitignore` 末尾追加几行(未改 A 已有的行)。
+
+怎么验证:`py -m pytest tests/test_b_modules.py -q`,21 项通过。
+
+### 接入 pipeline 的写法
+
+```python
+from agent.pipeline import Steps, run
+from agent.scene import scene_step
+from agent.platform_rules import platform_step
+from agent.compose import compose_step
+
+steps = Steps(scene=scene_step, platform=platform_step, compose=compose_step)
+res = run(task, retriever, steps)
+```
+
+### 对齐 A 契约的取舍
+
+- `TaskInput.platform` 取 公众号 / 小红书 / 朋友圈 / 海报。`platform_rules.normalize_platform` 会把"微信公众号""门店海报"等别名归一;无法识别抛 `UnknownPlatform`。
+- `SceneProfile.purchase_stage` 只取 了解 / 比较 / 决策 / 已购。原先想用的"到店"并入"决策",用 `visit_intent` 保留差异。阶段是否为推断,单独用 `scene.is_stage_inferred(task)` 回答,不污染契约字段。
+- 契约未改动。`compose` 返回 `ComposedDraft`(继承 `Draft`),多出三个字段,pipeline / verify / export 不需要改:
+  - `strategy`:内容策略说明(切入点、卖点顺序、不写什么、图片安排),手册要求评委能看到"为什么这样写"
+  - `title_options`:备选标题
+  - `pending`:待确认项
+
+### 给 C 的提示
+
+- 请把 `getattr(draft, "pending", [])` 并入 `Report.to_confirm`。导出 Markdown 可直接用 `compose.render_markdown(draft)`,它会带上策略说明、配图方案和待确认项。
+- 模型若编造事实点 ID,我**故意保留**在 `used_fact_ids` 里,让 `verify` 去阻断,不在 compose 里悄悄删掉。
+- 模型若编造图片文件名,compose 直接丢弃并写进 `pending`,不会把它换成别的图。
+- 同型号可用图片少于平台下限时,不用其他型号补数,在 `pending` 里写"可用同型号图片不足"。
+
+### 给 A 的提示
+
+- `compose` 只接受 `FactSelection.usable` 里的事实,`pending` 不会进入提示词。提示词里事实点按场景的 `fact_priority` 排序,最多 14 条。
+- `scene.parse_scene(task, use_llm=False)` 默认纯规则,可复现;打开 `use_llm=True` 才会用模型整理自由文本,模型不可用时自动退回规则层。
+- 追问最多 3 条,来源于 `data/scene_library.yaml` 的 `clarifying_questions`。
+
+### 已知限制
+
+- 尚未用真实大模型验证写作质量,等 `LLM_API_KEY` 配好后做。
+- 尚未接 ima(用的是本地副本)。
+- 场景匹配目前是关键词规则,8 类之外会走兜底场景,兜底只写"人群、任务、事实、限制"四件事。
+- 增强模块(客户洞察卡、1/3/7 天跟进)只写在 `prompts/06_generation.md` 末尾,代码里还没有实现。

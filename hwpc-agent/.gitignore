@@ -9,3 +9,16 @@ __pycache__/
 venv/
 ima-skill/
 outputs/
+
+# --- B 追加 ---
+*.pem
+*.log
+secrets/
+node_modules/
+ima-skills*/
+# 本地知识库副本:手册要求不得对外传播资料
+华为PC知识库*/
+华为PC全板块深度知识库*/
+kb_local/
+.DS_Store
+Thumbs.db
