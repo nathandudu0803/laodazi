@@ -1,0 +1,78 @@
+# 型号注册表(A)。canonical 与 P1 图片索引的"产品型号"列一致。
+# 匹配前统一:转小写、去空格/括号/连字符、去掉 "huawei" 前缀词。别名也按同样方式规范化。
+models:
+  - canonical: "HUAWEI MateBook 14（鸿蒙版）"
+    dir: "01-鸿蒙电脑/HUAWEI MateBook 14"
+    official: "HUAWEI MateBook 14（鸿蒙版）"
+    price_names: ["HUAWEI MateBook 14（鸿蒙版）"]
+    aliases: ["MateBook 14 鸿蒙", "14鸿蒙", "14 鸿蒙版", "鸿蒙版 MateBook 14", "MateBook 14 HarmonyOS", "鸿蒙MateBook14"]
+  - canonical: "HUAWEI MateBook Fold 非凡大师"
+    dir: "01-鸿蒙电脑/HUAWEI MateBook Fold 非凡大师"
+    official: "HUAWEI MateBook Fold 非凡大师"
+    price_names: ["HUAWEI MateBook Fold 非凡大师"]
+    aliases: ["非凡大师", "MateBook Fold", "Fold 非凡大师", "Fold"]
+  - canonical: "HUAWEI MateBook Pro"
+    dir: "01-鸿蒙电脑/HUAWEI MateBook Pro"
+    official: "HUAWEI MateBook Pro"
+    price_names: ["HUAWEI MateBook Pro（鸿蒙版）", "HUAWEI MateBook Pro"]
+    aliases: ["MateBook Pro 鸿蒙", "Pro 鸿蒙版", "鸿蒙 Pro"]
+  - canonical: "HUAWEI MateBook Pro S"
+    dir: "01-鸿蒙电脑/HUAWEI MateBook Pro S"
+    official: "HUAWEI MateBook Pro S"
+    price_names: ["HUAWEI MateBook Pro S"]
+    aliases: ["MateBook Pro S", "Pro S", "ProS"]
+  - canonical: "HUAWEI MateBook 14 酷睿 Ultra"
+    dir: "02-MateBook-Windows/MateBook 14 酷睿 Ultra"
+    official: "HUAWEI MateBook 14 酷睿 Ultra"
+    price_names: ["HUAWEI MateBook 14 酷睿 Ultra"]
+    aliases: ["MateBook 14 酷睿 Ultra", "14 酷睿 Ultra", "14 Ultra", "14 Windows 版", "酷睿 Ultra 版 MateBook 14"]
+  - canonical: "HUAWEI MateBook D 14 2024"
+    dir: "02-MateBook-Windows/MateBook D 14"
+    official: "HUAWEI MateBook D 14 2024"
+    price_names: ["HUAWEI MateBook D 14 2024"]
+    aliases: ["D14", "D 14", "MateBook D14", "MateBook D 14", "D14 2024"]
+  - canonical: "HUAWEI MateBook D 16 2024"
+    dir: "02-MateBook-Windows/MateBook D 16"
+    official: "HUAWEI MateBook D 16 2024"
+    price_names: ["HUAWEI MateBook D 16 2024"]
+    aliases: ["D16 2024", "D 16 2024", "MateBook D 16 2024", "非SE D16"]
+  - canonical: "HUAWEI MateBook D 16 SE 版 2024"
+    dir: "02-MateBook-Windows/MateBook D 16 SE 版"
+    official: "HUAWEI MateBook D 16 SE 版 2024"
+    price_names: ["HUAWEI MateBook D 16 SE 版 2024"]
+    aliases: ["D16 SE", "D 16 SE", "D16SE", "D 16 SE 版", "MateBook D 16 SE", "D16 SE 版"]
+  - canonical: "HUAWEI MateBook GT 14"
+    dir: "02-MateBook-Windows/MateBook GT 系列"
+    official: "HUAWEI MateBook GT 14"
+    price_names: ["HUAWEI MateBook GT 14"]
+    aliases: ["GT14", "GT 14", "MateBook GT", "GT 系列", "MateBook GT 14", "GT"]
+  - canonical: "HUAWEI MateBook X Pro 酷睿 Ultra 微绒典藏版"
+    dir: "02-MateBook-Windows/MateBook X系列"
+    official: "HUAWEI MateBook X Pro 酷睿 Ultra 微绒典藏版"
+    price_names: ["HUAWEI MateBook X Pro 酷睿 Ultra 微绒典藏版"]
+    aliases: ["X Pro", "MateBook X Pro", "X系列", "X 系列", "微绒典藏版", "X Pro 微绒典藏版"]
+
+# 泛称:同一个别名对应多个型号时必须追问,不得二选一。
+ambiguous_aliases:
+  "D系列": ["HUAWEI MateBook D 14 2024", "HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024"]
+  "MateBook D": ["HUAWEI MateBook D 14 2024", "HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024"]
+  "MateBook D 16": ["HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024"]
+  "D16": ["HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024"]
+  "MateBook 14": ["HUAWEI MateBook 14（鸿蒙版）", "HUAWEI MateBook 14 酷睿 Ultra", "HUAWEI MateBook GT 14"]
+  "14寸": ["HUAWEI MateBook 14（鸿蒙版）", "HUAWEI MateBook 14 酷睿 Ultra", "HUAWEI MateBook GT 14"]
+  "Pro": ["HUAWEI MateBook Pro", "HUAWEI MateBook Pro S"]
+  "MateBook Pro": ["HUAWEI MateBook Pro", "HUAWEI MateBook Pro S"]
+  "MateBook": ["HUAWEI MateBook 14（鸿蒙版）", "HUAWEI MateBook Fold 非凡大师", "HUAWEI MateBook Pro", "HUAWEI MateBook Pro S", "HUAWEI MateBook 14 酷睿 Ultra", "HUAWEI MateBook D 14 2024", "HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024", "HUAWEI MateBook GT 14", "HUAWEI MateBook X Pro 酷睿 Ultra 微绒典藏版"]
+
+# 易混淆对:区分字段用于追问提示。
+confusable_pairs:
+  - models: ["HUAWEI MateBook D 14 2024", "HUAWEI MateBook D 16 2024"]
+    distinguish: "屏幕尺寸(14 英寸 / 16 英寸)"
+  - models: ["HUAWEI MateBook D 16 2024", "HUAWEI MateBook D 16 SE 版 2024"]
+    distinguish: "是否 SE 版(处理器、存储、电池等配置不同)"
+  - models: ["HUAWEI MateBook 14（鸿蒙版）", "HUAWEI MateBook 14 酷睿 Ultra"]
+    distinguish: "操作系统(HarmonyOS / Windows)"
+  - models: ["HUAWEI MateBook Pro", "HUAWEI MateBook Pro S"]
+    distinguish: "是否 S 版(屏幕、重量、厚度、多配置)"
+  - models: ["HUAWEI MateBook GT 14", "HUAWEI MateBook 14（鸿蒙版）", "HUAWEI MateBook 14 酷睿 Ultra"]
+    distinguish: "GT 14 为 14.2 英寸 OLED,与其他 14 英寸机型屏幕、系统不同"
