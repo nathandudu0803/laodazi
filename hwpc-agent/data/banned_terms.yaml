@@ -1,0 +1,208 @@
+# 禁用词表
+# 来源：P6-营销素材库/08-合规、P6/02-平台模板、P3/08-竞品对比案例、P5-培训赋能库
+# 维护：从知识库原文提取，不凭空编造
+# 用途：C 模块的合规检查，拦截虚假承诺、绝对化用语、价格误导和竞品贬低
+
+# 每条包含：
+# - term: 词或正则表达式
+# - category: 类别
+# - severity: blocking(阻断) 或 warning(警告)
+# - suggestion: 改写建议
+# - context: 可能误伤的合理上下文（可选）
+
+banned_terms:
+  # ========== 1. 绝对化用语 ==========
+  - term: "唯一"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "使用'特色功能'或具体描述差异点"
+    context: "允许：'唯一标识符''唯一型号'等技术术语"
+
+  - term: "第一"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "避免排名表述，改为具体功能或时间描述"
+    context: "允许：'第一代''第一步'等顺序描述"
+
+  - term: "最强|最好|最优"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "使用具体参数或'卓越''出色'等相对描述"
+
+  - term: "全面领先"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "列出具体领先项及来源"
+
+  - term: "零风险|绝对安全|彻底"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "说明具体安全措施，保留适用条件"
+
+  - term: "永不卡|永不.*|终身.*"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "说明性能配置和适用场景，不做长期保证"
+    context: "允许：'终身免费'如果有官方依据"
+
+  - term: "零门槛"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "说明具体参与条件"
+
+  - term: "任何.*都|全国都|所有.*都"
+    category: "绝对化"
+    severity: "blocking"
+    suggestion: "添加具体范围和条件"
+
+  # ========== 2. 虚假承诺与稀缺 ==========
+  - term: "终身免费"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "说明具体服务项、时限和条件，或提供官方政策链接"
+
+  - term: "无条件退换|无条件.*"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "说明退换条件和时限"
+
+  - term: "全部覆盖"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "列出具体覆盖范围和限制"
+
+  - term: "绝对兼容"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "说明兼容的系统、设备型号和版本，建议实际验证"
+
+  - term: "售后无忧"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "列出官方服务入口、适用条件和保修范围"
+
+  - term: "最后.*台|仅剩.*|库存告急"
+    category: "虚假稀缺"
+    severity: "blocking"
+    suggestion: "删除虚假紧迫感，以产品价值引导"
+
+  - term: "懂的.*私聊|内部价|特殊渠道"
+    category: "虚假稀缺"
+    severity: "blocking"
+    suggestion: "使用官方渠道和透明价格信息"
+
+  - term: "限.*名|名额.*|抢购"
+    category: "虚假稀缺"
+    severity: "warning"
+    suggestion: "如有限额需提供官方活动依据"
+
+  - term: "保证.*|承诺.*|一定.*|必定.*"
+    category: "虚假承诺"
+    severity: "blocking"
+    suggestion: "使用'建议''通常'等表述，保留条件"
+    context: "允许：'质量保证期'等官方术语"
+
+  # ========== 3. 价格与补贴误导 ==========
+  - term: "全网最低|最低价|史上最低"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "删除价格比较，或提供具体渠道和核验日期"
+
+  - term: "现在买一定最便宜|当前最优惠"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "说明当前价格来源和日期，不做未来承诺"
+
+  - term: "国补立减|国家补贴.*元"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "知识库无国补数值，删除或标记'待人工确认'"
+
+  - term: "人人可享|无门槛.*元"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "说明具体适用人群和条件"
+
+  - term: "到手价.*元"
+    category: "价格误导"
+    severity: "warning"
+    suggestion: "必须说明价格类型（预估到手价）、优惠明细和核验日期"
+
+  - term: "教育优惠.*元|学生价.*元"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "知识库无教育优惠数值，删除或标记'待人工确认'"
+
+  - term: "以旧换新.*元|换新补贴.*元"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "知识库无以旧换新数值，删除或标记'待人工确认'"
+
+  - term: "内部价|员工价|特殊优惠"
+    category: "价格误导"
+    severity: "blocking"
+    suggestion: "使用官方公开价格和渠道"
+
+  # ========== 4. 竞品贬低与无依据对比 ==========
+  - term: "碾压|吊打|秒杀|完爆"
+    category: "竞品贬低"
+    severity: "blocking"
+    suggestion: "使用客观参数对比，提供测试条件和来源"
+
+  - term: "完胜|远超|不如|落后"
+    category: "竞品贬低"
+    severity: "blocking"
+    suggestion: "提供具体参数、测试环境和日期，不做主观判断"
+
+  - term: "吊打|秒.*"
+    category: "竞品贬低"
+    severity: "blocking"
+    suggestion: "删除攻击性表述"
+
+  - term: "排名第.*|评分.*分|.*星推荐"
+    category: "无依据对比"
+    severity: "blocking"
+    suggestion: "提供评测机构、日期和原文链接，或删除"
+    context: "允许：官方授权的第三方评测引用"
+
+  - term: "销量第.*|市场占有率.*"
+    category: "无依据对比"
+    severity: "blocking"
+    suggestion: "知识库无销量数据，删除"
+
+  - term: "用户好评.*|.*%好评"
+    category: "无依据对比"
+    severity: "blocking"
+    suggestion: "不得虚构用户评价，删除"
+
+  # ========== 5. 体验与案例虚构 ==========
+  - term: "亲测|实测|我用.*"
+    category: "虚构体验"
+    severity: "blocking"
+    suggestion: "删除第一人称体验，改用产品参数"
+
+  - term: "效率翻倍|提升.*倍|.*倍性能"
+    category: "虚构体验"
+    severity: "warning"
+    suggestion: "提供测试方法、环境、样本和授权，或删除"
+
+  - term: "客户反馈|用户表示|.*评价说"
+    category: "虚构体验"
+    severity: "blocking"
+    suggestion: "不得引用未授权的用户评价"
+
+  # ========== 6. 其他合规风险 ==========
+  - term: "官方唯一|官方指定|官方推荐"
+    category: "误导性授权"
+    severity: "blocking"
+    suggestion: "除非有官方授权文件，否则删除"
+
+  - term: "限时.*免费|免费领取"
+    category: "活动合规"
+    severity: "warning"
+    suggestion: "说明活动时间、适用范围和参与条件"
+
+  - term: "不.*后悔|买到就是赚"
+    category: "情绪煽动"
+    severity: "warning"
+    suggestion: "使用客观产品描述"
