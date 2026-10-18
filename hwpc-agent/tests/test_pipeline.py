@@ -1,4 +1,5 @@
 """A 的 pipeline / facts 测试(使用桩,B、C 模块就绪后由 D 扩展)。"""
+import os
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,11 @@ from agent.contracts import Report, TaskInput
 from agent.pipeline import Steps, run
 from agent.retriever.local import LocalRetriever
 
-KB = Path(__file__).resolve().parents[2] / "华为PC全板块深度知识库_v7"
+_AGENT_ROOT = Path(__file__).resolve().parents[1]
+# 与 LocalRetriever 一致:优先读 LOCAL_KB_ROOT,相对路径以 hwpc-agent 为基准
+KB = Path(os.environ.get("LOCAL_KB_ROOT") or _AGENT_ROOT.parent / "华为PC全板块深度知识库_v7")
+if not KB.is_absolute():
+    KB = (_AGENT_ROOT / KB).resolve()
 pytestmark = pytest.mark.skipif(not KB.exists(), reason="本地知识库副本不存在")
 
 
