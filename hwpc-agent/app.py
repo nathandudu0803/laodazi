@@ -200,7 +200,8 @@ def run_pipeline(product, audience, scene, platform, extra_requirements):
 def create_ui():
     """创建Gradio界面。"""
 
-    with gr.Blocks(title="华为PC营销软文智能体", theme=gr.themes.Soft()) as demo:
+    # Gradio 6:theme 已从 Blocks 移到 launch()
+    with gr.Blocks(title="华为PC营销软文智能体") as demo:
         gr.Markdown(
             """
             # 华为PC营销软文智能体
@@ -273,14 +274,14 @@ def create_ui():
                     with gr.Tab("📥 导出（Markdown）"):
                         markdown_output = gr.Textbox(
                             lines=20,
-                            show_copy_button=True,
+                            buttons=["copy"],  # Gradio 6 用 buttons 代替 show_copy_button
                             label="Markdown格式"
                         )
 
                     with gr.Tab("📥 导出（纯文本）"):
                         text_output = gr.Textbox(
                             lines=20,
-                            show_copy_button=True,
+                            buttons=["copy"],  # Gradio 6 用 buttons 代替 show_copy_button
                             label="纯文本格式"
                         )
 
@@ -316,13 +317,18 @@ def create_ui():
 
 
 def main():
-    """主入口。"""
+    """主入口。
+
+    默认只监听本机,调试时不对局域网开放。部署到魔搭创空间时用
+    GRADIO_SERVER_NAME=0.0.0.0 覆盖(平台侧自带访问控制)。
+    """
     demo = create_ui()
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
+        server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"),
+        server_port=int(os.getenv("GRADIO_SERVER_PORT", "7860")),
         share=False,
-        show_error=True
+        show_error=True,
+        theme=gr.themes.Soft(),  # Gradio 6:theme 在 launch() 里传
     )
 
 

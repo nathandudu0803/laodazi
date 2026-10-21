@@ -228,3 +228,87 @@ res = run(task, retriever, steps)
 - 待复核字段:D 14、D 16、D 16 SE、X Pro 酷睿 Ultra 的"尺寸与重量"(长度/宽度/厚度),核验应标记为"待确认"。
 - 构造包含全部 6 类禁用词的测试稿,检查拦截率。
 - 界面压力测试:连续提交、中断、异常型号。
+
+## [2026-10-21] B:ima 检索接入,已用真实凭证验证
+
+### 新增与改动
+
+- 新增 `agent/retriever/ima_api.py`:ima OpenAPI 客户端(Python + httpx,不依赖 Node)。
+- 新增 `agent/retriever/model_index.py`:型号解析,从 `local.py` 抽出的共享实现。A 可改成引用本模块。
+- 重写 `agent/retriever/ima.py`:`ImaRetriever` 实现 `Retriever` 接口,解析复用 A 的 `local_parsers`,
+  保证 ima 与本地产出同构的 Fact。
+- 新增 `tests/test_ima_retriever.py`(26 项,全部用假客户端,不联网、不需凭证)。
+- **改动了 C 名下的 `app.py`**:修 Gradio 6 的启动报错。`Textbox` 去掉 `show_copy_button` 改用
+  `buttons=["copy"]`;`theme` 从 `gr.Blocks()` 移到 `demo.launch()`;`server_name` 从 `0.0.0.0`
+  改成 `127.0.0.1`(原来监听所有网卡而界面无登录验证),用 `GRADIO_SERVER_NAME` 可覆盖,部署魔搭时设 `0.0.0.0`。
+
+### 为什么不用官方 ima_api.cjs
+
+魔搭创空间是 Python 镜像不保证有 node;官方 Skill 包属第三方文件不随本仓库发布;该脚本每天检查一次
+Skill 更新,发现新版本会拒绝发送原请求(返回 -200)。官方脚本做的事等价于 POST
+`https://ima.qq.com/<path>` 带三个请求头,无签名无加密,故用 httpx 直接实现。
+
+### 接口文档与实测不一致的三处(以实测为准)
+
+1. 知识库字段是 `kb_id` / `kb_name`,不是 `api.md` 写的 `id` / `name`。用 `kb_id_of()` / `kb_name_of()` 兼容两者。
+2. `get_knowledge_list` 的条目**统一只有 `media_id`**,文件夹靠 `media_type == 99` 和 `media_id` 的
+   `folder_` 前缀区分,**没有独立的 `folder_id` 字段**(`folder_id` 只出现在 `current_path` 里)。
+   文件夹的 `media_id`(形如 `folder_123`)才是可回传的 `folder_id`。
+3. 导入 ima 后**根层只有一个与知识库同名的包裹文件夹**,P1~P8 在它下面一层;本地副本里 P1~P8 直接在根层。
+   `_top_folder()` 会自动穿透,但仅在该层恰好只有一个文件夹时才穿,避免误跳进兄弟目录。
+
+### 安全约束
+
+- 只实现读接口白名单(`search_knowledge_base`、`get_knowledge_base`、`get_knowledge_list`、
+  `search_knowledge`、`get_media_info`),写接口直接拒绝(手册禁止修改知识库)。
+- `base_url` 固定不从环境变量读,避免凭证被指向其他主机。
+- 凭证只经请求头发往 ima.qq.com,不写文件、不进日志。`_redact()` 对异常文本脱敏,`__repr__` 不暴露凭证。
+- `ImaCredentials.from_env()` 读 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`,也可由界面传入。
+
+### 真实验证结果(2026-10-21)
+
+目录结构与 `data/model_aliases.yaml` 的 `dir` 完全对得上,型号资料文件名是 `产品事实.md`
+(不是手册提到的 `article.md`)。与本地副本逐型号比对,事实/图片/价格三项全部一致:
+
+| 型号 | 事实 | 图片 | 价格 |
+|---|---|---|---|
+| D 14 2024 | 65 | 7 | 4 |
+| MateBook 14(鸿蒙版) | 49 | 19 | 15 |
+| Fold 非凡大师 | 57 | 5 | 10 |
+| MateBook Pro | 46 | 8 | 11 |
+| MateBook Pro S | 54 | 6 | 17 |
+
+尺寸三项正确标为 `pending_review`。图片临时链接可取。
+
+### 已知限制
+
+- **取原文有每日配额**:用尽时返回 `code=220021`「资料获取次数已达上限」,目录浏览不受限。
+  已包装成 `ImaQuotaError` 并给出可操作提示,界面不应显示成"找不到资料"。
+  剩余 5 个型号(14 酷睿 Ultra、D 16、D 16 SE、GT 14、X Pro)因配额用尽未逐一比对,解析逻辑共用,风险较低。
+- 搜索为空**必须**回退到 `get_knowledge_list` 逐级浏览(手册明确要求,有测试覆盖)。
+- ima 下 `ImageRef.file_path` 存的是 media_id 而非本地路径,展示与导出都要走 `image_url()` 取临时链接。
+- 图片要同时满足"索引登记"和"库里真实存在"两个条件,型号不一致不输出。
+  官网图走 `images/图片索引.csv`,商城款式图走 `商城款式图片/图片索引.csv`(7 列、无产品型号列,
+  靠"仅限本型号目录"保证型号),两份索引都要读。
+- 价格空金额保持 `None`,绝不转 0。
+
+### 怎么验证
+
+```bash
+cd hwpc-agent
+export PYTHONIOENCODING=utf-8 PYTHONUTF8=1
+export LOCAL_KB_ROOT="<本地知识库副本路径>"
+python -m pytest tests -q   # 90 passed
+```
+
+真实连接自测(不含凭证,凭证走环境变量):
+
+```bash
+python -c "from agent.retriever.ima import ImaRetriever; print(ImaRetriever().check_connection())"
+```
+
+### 还没做
+
+- 界面填 Key:`ImaRetriever(creds=...)` 与 `ImaCredentials` 已支持传入,界面侧未实现。
+- `app.py` 仍写死 `LocalRetriever`,需按 `RETRIEVER` 环境变量在 local / ima 之间切换。
+- 魔搭创空间部署:入口文件位置、环境变量配置方式待验证。
