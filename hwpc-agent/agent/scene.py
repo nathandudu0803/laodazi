@@ -163,7 +163,7 @@ def clarifying_questions(task: TaskInput, scene: SceneProfile, ctx: SceneContext
     return uniq[:3]
 
 
-def _llm_enrich(task: TaskInput) -> dict:
+def _llm_enrich(task: TaskInput, llm_config=None) -> dict:
     """可选:让模型把自由文本整理成结构化字段。模型不可用时返回空,走纯规则。"""
     try:
         from agent import llm
@@ -176,17 +176,22 @@ def _llm_enrich(task: TaskInput) -> dict:
             '只输出 JSON:{"main_problem":"","content_goal":"","purchase_stage":""}。'
             "purchase_stage 只能取 了解/比较/决策/已购 之一,或留空。"
         )
-        data = llm.chat_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0)
+        data = llm.chat_json(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            config=llm_config,
+            temperature=0,
+        )
         return data if isinstance(data, dict) else {}
     except Exception as exc:  # noqa: BLE001  模型不可用不应阻断规则层
         logger.info("场景解析跳过模型层: %s", type(exc).__name__)
         return {}
 
 
-def parse_scene(task: TaskInput, use_llm: bool = False) -> SceneProfile:
+def parse_scene(task: TaskInput, use_llm: bool = False, llm_config=None) -> SceneProfile:
     """pipeline.Steps.scene 的签名:scene(task) -> SceneProfile。
 
     use_llm=False(默认)时纯规则,结果可复现,适合测试与离线演示。
+    llm_config 为界面填写的大模型配置;为 None 时回退到环境变量。
     """
     audience = (task.audience or "").strip()
     usage = (task.scene or "").strip()
@@ -194,7 +199,7 @@ def parse_scene(task: TaskInput, use_llm: bool = False) -> SceneProfile:
     key = match_scene_key(text)
     lib_scene = load_library()["scenes"].get(key) or {}
 
-    enriched = _llm_enrich(task) if use_llm else {}
+    enriched = _llm_enrich(task, llm_config) if use_llm else {}
     stage, inferred = _default_stage(key, text)
     m_stage = enriched.get("purchase_stage")
     if m_stage in VALID_STAGES:

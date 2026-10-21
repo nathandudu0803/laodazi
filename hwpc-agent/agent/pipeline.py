@@ -164,8 +164,15 @@ def run(task: TaskInput, retriever: Retriever, steps: Steps | None = None) -> Pi
     return res
 
 
-def real_steps(retriever: Retriever) -> Steps:
-    """接入 B、C 的真实模块。compose 需要大模型环境变量;未配置时 compose 抛错,run 不会导出。"""
+def real_steps(retriever: Retriever, llm_config=None, use_llm_scene: bool = False) -> Steps:
+    """接入 B、C 的真实模块。
+
+    llm_config 为界面填写的大模型配置(agent.llm.LLMConfig);为 None 时
+    compose 回退到环境变量,仍未配置则 compose 抛错,run 不会导出。
+    use_llm_scene 打开场景解析的模型层(默认关闭,纯规则结果可复现)。
+    """
+    from functools import partial
+
     from agent import compliance as comp_mod
     from agent import compose as compose_mod
     from agent import export as export_mod
@@ -174,9 +181,18 @@ def real_steps(retriever: Retriever) -> Steps:
 
     ctx: dict = {}
 
+    chat_json = None
+    if llm_config is not None:
+        from agent import llm
+
+        chat_json = partial(llm.chat_json, config=llm_config)
+
+    def scene_step(task):
+        return scene.parse_scene(task, use_llm=use_llm_scene, llm_config=llm_config)
+
     def compose(task, sc, plan, sel, images):
         ctx["model"] = task.model
-        return compose_mod.compose_step(task, sc, plan, sel, images)
+        return compose_mod.compose_draft(task, sc, plan, sel, images, chat_json=chat_json)
 
     def verify(draft, sel, images):
         return verify_mod.verify(draft, sel.usable + sel.pending, images)
@@ -185,5 +201,5 @@ def real_steps(retriever: Retriever) -> Steps:
         records = retriever.get_price_records(ctx["model"]) if ctx.get("model") else []
         return comp_mod.compliance_check(draft, records)
 
-    return Steps(scene=scene.scene_step, platform=platform_rules.platform_step, compose=compose,
+    return Steps(scene=scene_step, platform=platform_rules.platform_step, compose=compose,
                  verify=verify, compliance=compliance, export=export_mod.export_markdown)

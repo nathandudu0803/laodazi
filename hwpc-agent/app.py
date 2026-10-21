@@ -1,6 +1,10 @@
-"""Gradio 入口(C)。
+"""Gradio 入口(C,B 在 2026-10-21 加了界面填凭证)。
 
 提供Web界面用于输入任务、展示结果和导出。
+
+凭证处理:公开部署时由使用者在界面自行填写,按会话隔离保存在 gr.State 里,
+不写进全局变量、不写 os.environ、不落盘、不进日志。未填写时回退到环境变量,
+方便本地开发。
 """
 import os
 from pathlib import Path
@@ -11,14 +15,29 @@ from dotenv import load_dotenv
 from agent import pipeline
 from agent.contracts import TaskInput
 from agent.export import export_markdown, export_report_only, export_text
+from agent.llm import LLMConfig, LLMError
+from agent.retriever.ima import ImaRetriever
+from agent.retriever.ima_api import ImaCredentials, ImaError
 from agent.retriever.local import LocalRetriever
 
 # 加载环境变量
 load_dotenv()
 
-# 初始化Retriever（默认使用本地）
+# 本地副本:仅开发期可用,云端没有这批文件(手册禁止上传知识库)
 KB_ROOT = os.getenv("LOCAL_KB_ROOT", "../华为PC全板块深度知识库_v7")
-retriever = LocalRetriever(KB_ROOT) if Path(KB_ROOT).exists() else None
+LOCAL_KB_AVAILABLE = Path(KB_ROOT).exists()
+
+
+def _blank_session() -> dict:
+    """一个访客的会话状态。凭证只存在这里,随会话销毁。"""
+    return {"retriever": None, "llm": None, "source": ""}
+
+
+def init_local_session() -> dict:
+    """开发期:直接用本地副本,免填 ima 凭证。"""
+    if not LOCAL_KB_AVAILABLE:
+        return _blank_session()
+    return {"retriever": LocalRetriever(KB_ROOT), "llm": None, "source": "本地副本"}
 
 
 def format_scene_profile(scene):
@@ -146,10 +165,74 @@ def format_verification(report):
     return "\n".join(lines)
 
 
-def run_pipeline(product, audience, scene, platform, extra_requirements):
+def connect_knowledge_base(client_id, api_key, kb_name, session):
+    """用界面填的 ima 凭证连接知识库。凭证只进会话状态,不写环境变量。"""
+    session = dict(session or _blank_session())
+    cid, key = (client_id or "").strip(), (api_key or "").strip()
+    if not cid or not key:
+        missing = "、".join(n for n, v in (("Client ID", cid), ("API Key", key)) if not v)
+        return f"⚠️ 请先填写 {missing}", session
+    try:
+        retr = ImaRetriever(
+            creds=ImaCredentials(client_id=cid, api_key=key),
+            kb_name=(kb_name or "").strip() or None,
+        )
+        name = retr.check_connection()
+    except ImaError as exc:
+        # ImaError 的 message 已脱敏,可直接展示
+        return f"❌ 连接失败：{exc}", session
+    except Exception as exc:  # noqa: BLE001  不展示未知异常的原文,避免带出凭证
+        return f"❌ 连接失败：{type(exc).__name__}", session
+    session["retriever"] = retr
+    session["source"] = f"ima 知识库「{name}」"
+    return f"✅ 已连接 {session['source']}", session
+
+
+def use_local_knowledge_base(session):
+    """开发期回退:用本地副本,不需要 ima 凭证。"""
+    session = dict(session or _blank_session())
+    if not LOCAL_KB_AVAILABLE:
+        return f"❌ 本地副本不可用（LOCAL_KB_ROOT={KB_ROOT}）", session
+    session["retriever"] = LocalRetriever(KB_ROOT)
+    session["source"] = "本地副本"
+    return "✅ 已连接本地副本（仅开发期可用）", session
+
+
+def save_llm_config(base_url, api_key, model, session):
+    """保存大模型配置到会话。不做真实调用,避免消耗额度。"""
+    session = dict(session or _blank_session())
+    try:
+        cfg = LLMConfig(
+            base_url=(base_url or "").strip(),
+            api_key=(api_key or "").strip(),
+            model=(model or "").strip(),
+        ).require()
+    except LLMError as exc:
+        return f"⚠️ {exc}", session
+    session["llm"] = cfg
+    return f"✅ 已保存大模型配置（模型：{cfg.model}）。生成时才会真正调用。", session
+
+
+def current_status(session) -> str:
+    """顶部状态条。只显示知识库名和模型名,不显示任何凭证。"""
+    session = session or _blank_session()
+    kb = session.get("source") or "未连接"
+    cfg = session.get("llm")
+    if cfg:
+        llm_txt = f"已配置（{cfg.model}）"
+    elif LLMConfig.from_env().api_key:
+        llm_txt = "用环境变量"
+    else:
+        llm_txt = "未配置"
+    return f"**知识库**：{kb} ｜ **大模型**：{llm_txt}"
+
+
+def run_pipeline(product, audience, scene, platform, extra_requirements, session):
     """运行完整流程。"""
+    session = session or _blank_session()
+    retriever = session.get("retriever")
     if not retriever:
-        return "❌ 错误：知识库未加载，请检查LOCAL_KB_ROOT环境变量", "", "", "", "", ""
+        return "❌ 请先在上方「① 连接知识库」里连接 ima 或本地副本", "", "", "", "", ""
 
     if not product:
         return "❌ 错误：请输入产品型号", "", "", "", "", ""
@@ -164,8 +247,9 @@ def run_pipeline(product, audience, scene, platform, extra_requirements):
     )
 
     try:
-        # 运行pipeline
-        result = pipeline.run(task, retriever, pipeline.real_steps(retriever))
+        # 运行pipeline。llm_config 为界面填写的配置,None 时回退到环境变量
+        steps = pipeline.real_steps(retriever, llm_config=session.get("llm"))
+        result = pipeline.run(task, retriever, steps)
 
         # 根据状态返回结果
         if result.status == "need_info":
@@ -213,9 +297,51 @@ def create_ui():
             """
         )
 
-        # 显示知识库状态
-        kb_status = "✅ 已连接本地知识库" if retriever else "❌ 知识库未加载"
-        gr.Markdown(f"**知识库状态**：{kb_status}")
+        # 每个访客一份会话状态,凭证只存这里,互不可见
+        session = gr.State(init_local_session)
+
+        status_bar = gr.Markdown(current_status(init_local_session()))
+
+        with gr.Accordion("⚙️ 连接配置（凭证只保存在当前会话，不上传、不记录）", open=not LOCAL_KB_AVAILABLE):
+            gr.Markdown(
+                "凭证仅用于本次浏览器会话，关闭页面即失效。"
+                "本站不保存、不记录、不会显示在任何输出里。"
+                "ima 凭证在 ima 客户端的「开放平台」里获取。"
+            )
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("#### ① 连接知识库（ima）")
+                    ima_cid = gr.Textbox(
+                        label="ima Client ID",
+                        type="password",
+                        placeholder="IMA_OPENAPI_CLIENTID",
+                    )
+                    ima_key = gr.Textbox(
+                        label="ima API Key",
+                        type="password",
+                        placeholder="IMA_OPENAPI_APIKEY",
+                    )
+                    ima_kb = gr.Textbox(
+                        label="知识库名称",
+                        placeholder="留空则用默认名称",
+                        info="需与 ima 里的知识库名称完全一致",
+                    )
+                    with gr.Row():
+                        connect_btn = gr.Button("连接 ima 知识库", variant="primary")
+                        local_btn = gr.Button("用本地副本（开发期）")
+                    ima_status = gr.Markdown()
+
+                with gr.Column():
+                    gr.Markdown("#### ② 配置大模型（OpenAI 兼容接口）")
+                    llm_base = gr.Textbox(
+                        label="Base URL",
+                        placeholder="https://api.deepseek.com/v1",
+                        info="任何 OpenAI 兼容接口，如 DeepSeek、通义",
+                    )
+                    llm_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
+                    llm_model = gr.Textbox(label="模型名", placeholder="deepseek-chat")
+                    save_llm_btn = gr.Button("保存大模型配置", variant="primary")
+                    llm_status = gr.Markdown()
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -285,10 +411,28 @@ def create_ui():
                             label="纯文本格式"
                         )
 
-        # 绑定事件
+        # 绑定事件。每个配置动作结束后刷新顶部状态条
+        connect_btn.click(
+            fn=connect_knowledge_base,
+            inputs=[ima_cid, ima_key, ima_kb, session],
+            outputs=[ima_status, session],
+        ).then(fn=current_status, inputs=session, outputs=status_bar)
+
+        local_btn.click(
+            fn=use_local_knowledge_base,
+            inputs=session,
+            outputs=[ima_status, session],
+        ).then(fn=current_status, inputs=session, outputs=status_bar)
+
+        save_llm_btn.click(
+            fn=save_llm_config,
+            inputs=[llm_base, llm_key, llm_model, session],
+            outputs=[llm_status, session],
+        ).then(fn=current_status, inputs=session, outputs=status_bar)
+
         generate_btn.click(
             fn=run_pipeline,
-            inputs=[product_input, audience_input, scene_input, platform_input, extra_input],
+            inputs=[product_input, audience_input, scene_input, platform_input, extra_input, session],
             outputs=[scene_output, kb_output, draft_output, verify_output, markdown_output, text_output]
         )
 
@@ -309,7 +453,8 @@ def create_ui():
             - 图片必须来自知识库且型号一致
             - 价格必须有依据且带类型和日期
             - 禁止虚构体验、评价、销量、奖项
-            - 所有密钥只在环境变量中配置，不会显示在界面
+            - 凭证只保存在当前会话，不落盘、不进日志、不会显示在界面或导出内容里
+            - ima 取原文有每日次数上限，用尽后需次日恢复
             """
         )
 

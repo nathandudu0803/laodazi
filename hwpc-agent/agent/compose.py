@@ -209,7 +209,12 @@ def compose_draft(
             temperature=0.7,
         )
     except Exception as exc:  # noqa: BLE001
-        raise ComposeError(f"模型生成失败:{type(exc).__name__}") from exc
+        from agent.llm import LLMError, redact
+
+        # LLMError 的文本已脱敏且带可操作提示(如"配置不完整,缺少 API Key"),
+        # 要透出给使用者;其他异常只给类型名,避免把地址或凭证带进界面。
+        detail = redact(exc) if isinstance(exc, LLMError) else type(exc).__name__
+        raise ComposeError(f"模型生成失败:{detail}") from exc
     if not isinstance(raw, dict):
         raise ComposeError("模型输出不是 JSON 对象")
 
