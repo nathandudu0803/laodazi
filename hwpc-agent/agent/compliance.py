@@ -119,15 +119,20 @@ def _check_price_compliance(draft: Draft, price_records: list[dict]) -> list[dic
     # 合并所有文本
     full_text = f"{draft.title}\n{draft.lead}\n{draft.body}\n{draft.call_to_action}"
 
-    # 1. 提取金额（匹配 "数字+元" 或 "¥数字" 或 "数字+"）
-    price_pattern = r'(?:¥|￥)?\s*(\d{1,6}(?:[,，]\d{3})*(?:\.\d{1,2})?)\s*(?:元|块|rmb)?'
-    matches = re.findall(price_pattern, full_text, re.IGNORECASE)
+    # 1. 提取金额。必须带货币标识才算价格：
+    #    旧正则把"元"设为可选，导致型号 14、重量 1.4、电池 56Wh、分辨率 1920x1200
+    #    等所有数字都被当成"无依据的价格"，任何软文都会被阻断。
+    currency_patterns = [
+        r'[¥￥]\s*(\d{1,6}(?:[,，]\d{3})*(?:\.\d{1,2})?)',           # ¥5799
+        r'(\d{1,6}(?:[,，]\d{3})*(?:\.\d{1,2})?)\s*(?:元|块钱|块)',   # 5799 元
+    ]
+    amounts = []
+    for pattern in currency_patterns:
+        for m in re.findall(pattern, full_text):
+            amounts.append(float(m.replace(',', '').replace('，', '')))
 
-    if not matches:
+    if not amounts:
         return results  # 没有价格信息，无需检查
-
-    # 清理数字中的逗号
-    amounts = [float(m.replace(',', '').replace('，', '')) for m in matches]
 
     # 构建price_records的金额集合
     valid_amounts = set()
@@ -200,13 +205,16 @@ def _check_forbidden_content(draft: Draft) -> list[dict[str, Any]]:
     results = []
     full_text = f"{draft.title}\n{draft.lead}\n{draft.body}\n{draft.call_to_action}"
 
+    # 注意：这里的正则过宽会造成大面积误杀。旧版 `我.*用` 会命中"我在图书馆用"，
+    # `.*奖.*项` 会命中"奖学金"，`.*评价` 会命中任何含"评价"的句子。
+    # 收紧到真正属于红线（编造体验/评价/销量/奖项/库存/排名）的表达。
     forbidden_patterns = [
-        (r"我.*用|亲测|实测|我的体验", "第一人称体验", "删除第一人称体验，使用产品参数"),
-        (r"用户.*说|客户.*表示|.*评价|买家.*反馈", "用户评价", "不得引用未授权的用户评价"),
-        (r"销量.*|卖出.*台|.*万台", "销量数据", "知识库无销量数据，删除"),
-        (r"获奖|.*奖.*项|荣获", "奖项", "需提供官方授权和证明，否则删除"),
+        (r"亲测|实测|我的使用体验|我的体验", "第一人称体验", "删除第一人称体验，使用产品参数"),
+        (r"用户.{0,6}评价|客户.{0,6}评价|买家.{0,6}评价|好评如潮|五星好评|口碑爆棚", "用户评价", "不得引用未授权的用户评价"),
+        (r"销量|卖出.{0,6}台|热销.{0,6}台|.{0,4}万台", "销量数据", "知识库无销量数据，删除"),
+        (r"荣获|获奖|获得.{0,6}奖|设计大奖|年度大奖|iF.{0,4}奖|红点奖", "奖项", "需提供官方授权和证明，否则删除"),
         (r"库存|现货|有货|缺货", "库存信息", "不得提及动态库存信息"),
-        (r"第.*名|排名.*|.*榜", "排名信息", "需提供权威机构来源和日期，否则删除"),
+        (r"第[一二三四五六七八九十\d]{1,3}名|排名第|排行榜|销量榜|好评榜", "排名信息", "需提供权威机构来源和日期，否则删除"),
     ]
 
     for pattern, category, suggestion in forbidden_patterns:

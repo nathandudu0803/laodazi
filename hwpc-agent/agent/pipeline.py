@@ -80,6 +80,13 @@ class Steps:
     export: Callable = stub_export
 
 
+def _describe_compliance(item: dict) -> str:
+    """把一条合规命中转成使用者能看懂的一句话。"""
+    kind = item.get("category") or item.get("type") or "合规项"
+    detail = item.get("issue") or item.get("term") or item.get("amount") or ""
+    return f"{kind}({detail})" if detail else str(kind)
+
+
 def _block(res: PipelineResult, reason: str) -> PipelineResult:
     res.status = "blocked"
     res.report.blocked = True
@@ -151,7 +158,11 @@ def run(task: TaskInput, retriever: Retriever, steps: Steps | None = None) -> Pi
     res.report.blocked, res.report.block_reason = vr.blocked, vr.block_reason
     res.report.to_confirm += vr.to_confirm
     res.report.compliance = st.compliance(res.draft)
-    res.report.blocked = res.report.blocked or any(c.get("blocking") for c in res.report.compliance)
+    blocking_items = [c for c in res.report.compliance if c.get("blocking")]
+    res.report.blocked = res.report.blocked or bool(blocking_items)
+    if blocking_items and not res.report.block_reason:
+        # 合规阻断必须写明原因，否则界面只能显示"流程已阻断："，使用者无从下手
+        res.report.block_reason = "合规检查未通过:" + ";".join(_describe_compliance(item) for item in blocking_items[:5])
     if res.report.blocked:
         res.status = "blocked"
         res.trace.append(f"核验阻断:{res.report.block_reason}")

@@ -12,17 +12,17 @@
 
 banned_terms:
   # ========== 1. 绝对化用语 ==========
-  - term: "唯一"
+  - term: "唯一的(选择|正确|答案|出路)|唯一(之选|选择|品牌|一家|指定|代理|正品)|独家"
     category: "绝对化"
     severity: "blocking"
     suggestion: "使用'特色功能'或具体描述差异点"
-    context: "允许：'唯一标识符''唯一型号'等技术术语"
+    context: "允许：'不是唯一''唯一标识符''唯一型号'等非排名表述"
 
-  - term: "第一"
+  - term: "第一名|全网第一|行业第一|销量第一|排名第一|第一品牌|第一选择"
     category: "绝对化"
     severity: "blocking"
     suggestion: "避免排名表述，改为具体功能或时间描述"
-    context: "允许：'第一代''第一步'等顺序描述"
+    context: "允许：'第一代''第一步''第一款''第一次'等顺序描述"
 
   - term: "最强|最好|最优"
     category: "绝对化"
@@ -39,18 +39,18 @@ banned_terms:
     severity: "blocking"
     suggestion: "说明具体安全措施，保留适用条件"
 
-  - term: "永不卡|永不.*|终身.*"
+  - term: "永不卡|永不(卡顿|掉线|损坏|过时)|终身(免费|保修|质保|维护)"
     category: "绝对化"
     severity: "blocking"
     suggestion: "说明性能配置和适用场景，不做长期保证"
-    context: "允许：'终身免费'如果有官方依据"
+    context: "允许：官方明确承诺的服务条款原样引用"
 
   - term: "零门槛"
     category: "绝对化"
     severity: "blocking"
     suggestion: "说明具体参与条件"
 
-  - term: "任何.*都|全国都|所有.*都"
+  - term: "任何人都|全国各地都|所有(用户|人|型号|机型|场景|配置)都|适用于所有"
     category: "绝对化"
     severity: "blocking"
     suggestion: "添加具体范围和条件"
@@ -61,7 +61,7 @@ banned_terms:
     severity: "blocking"
     suggestion: "说明具体服务项、时限和条件，或提供官方政策链接"
 
-  - term: "无条件退换|无条件.*"
+  - term: "无条件(退换|退款|退货)"
     category: "虚假承诺"
     severity: "blocking"
     suggestion: "说明退换条件和时限"
@@ -96,11 +96,11 @@ banned_terms:
     severity: "warning"
     suggestion: "如有限额需提供官方活动依据"
 
-  - term: "保证.*|承诺.*|一定.*|必定.*"
+  - term: "保证(效果|续航|不掉|不卡|满意|赚钱|第一)|承诺(效果|续航|保值|收益)|一定能|必定能|保证100%"
     category: "虚假承诺"
     severity: "blocking"
     suggestion: "使用'建议''通常'等表述，保留条件"
-    context: "允许：'质量保证期'等官方术语"
+    context: "允许：'质量保证期''一定要（建议语气）'等非承诺表述"
 
   # ========== 3. 价格与补贴误导 ==========
   - term: "全网最低|最低价|史上最低"

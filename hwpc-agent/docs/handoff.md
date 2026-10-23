@@ -312,3 +312,33 @@ python -c "from agent.retriever.ima import ImaRetriever; print(ImaRetriever().ch
 - 界面填 Key:`ImaRetriever(creds=...)` 与 `ImaCredentials` 已支持传入,界面侧未实现。
 - `app.py` 仍写死 `LocalRetriever`,需按 `RETRIEVER` 环境变量在 local / ima 之间切换。
 - 魔搭创空间部署:入口文件位置、环境变量配置方式待验证。
+
+## [2026-10-23] A:合规误杀修复 + 魔搭部署闭环
+
+完成了什么:修掉三处会让正常软文被"流程已阻断"的缺陷,并把魔搭创空间的发布流程跑通。
+
+改动文件:`agent/compliance.py`、`agent/pipeline.py`、`data/banned_terms.yaml`。
+
+三处缺陷:
+- 价格正则把"元"设为可选,导致型号 14、重量 1.4、电池 56Wh、分辨率 1920x1200 全部被当成"无依据的价格"。
+  现在只识别带 `¥/￥` 前缀或 `元/块` 后缀的数字。
+- `banned_terms.yaml` 里 `第一`、`唯一`、`任何.*都`、`保证.*|一定.*`、`永不.*|终身.*` 等正则过宽,
+  "不是唯一变量""第一款软件""一定要带清单"都会被拦。已收窄为真实排名/承诺表达
+  (第一名、全网第一、唯一的正确选择、保证续航、终身免费等),并用 15 条正反用例验证。
+- 合规阻断时 `Report.block_reason` 为空,界面只显示"🚫 流程已阻断:",使用者无从下手。
+  现在 `pipeline.run` 会把命中的合规项写进 reason。
+
+怎么验证:
+- 合规正反用例 15 条全部符合预期(误报 0,真违规仍拦截)。
+- `py -m pytest tests -q`(排除需要 openai/httpx/gradio 的三组)64 passed。
+- 真实 DeepSeek + 本地知识库跑通全流程:状态 ok,生成 800+ 字、4-5 张图、11-14 条事实引用,
+  事实/图片/合规核验全部通过。
+
+魔搭部署必读(踩坑记录):
+- **git push 到创空间后不会自动重建**,必须再调
+  `POST https://www.modelscope.cn/openapi/v1/studios/<user>/<name>/deploy`(Bearer token),
+  然后轮询 `GET /api/v1/studio/<user>/<name>` 的 `Status`(`CreatingBuildingImage` → `Creating` → `Running`),
+  单次构建约 10-20 分钟。
+- 创空间实际 SDK 为 Gradio 6.29.1,`buttons=["copy"]`、`theme` 放 `launch()` 均兼容。
+- 云端没有本地知识库副本,访客需在界面「连接配置」里填 ima 凭证与大模型配置;只连 ima 不配模型会阻断,
+  提示为"模型生成失败:缺少模型名"。
